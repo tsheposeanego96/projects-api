@@ -1,0 +1,127 @@
+service: projects-service
+
+plugins:
+  - serverless-offline
+
+custom:
+  allowedOrigins:
+    - https://*
+    - http://localhost:4200
+
+  allowedHeaders:
+    - Accept
+    - Content-Type
+    - Content-Length
+    - Authorization
+    - Access-Control-Allow-Origin
+    - X-Amz-Date
+    - X-Api-Key
+    - X-Amz-Security-Token
+    - X-Amz-User-Agent
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  region: eu-west-1
+  stage: ${env:STAGE_NAME, opt:stage}
+  memorySize: 256
+  timeout: 30
+  endpointType: regional
+  environment:
+    PROJECTS_TABLE: projects-api-${opt:stage, self:provider.stage}
+    REGION: ${self:provider.region}
+    STAGE: ${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+        - dynamodb:Query
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.PROJECTS_TABLE}"
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+        - dynamodb:Query
+      Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.PROJECTS_TABLE}/index/*"
+   
+functions:
+  getProjects:
+    handler: getProjects.handler
+    description: POST /
+    events:
+      - http:
+          path: /projects
+          method: get
+          cors:
+            origins: ${self:custom.allowedOrigins}
+            headers: ${self:custom.allowedHeaders}
+
+resources:
+  Resources:
+    ProjectsTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Delete
+      Properties:
+        Tags:
+          - Key: Name
+            Value: DynamoDb
+        TableName: ${self:provider.environment.PROJECTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: data
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        SSESpecification:
+          SSEEnabled: true
+          SSEType: KMS
+
+        GlobalSecondaryIndexes:
+        - IndexName: sk-data-index
+          KeySchema:
+            - AttributeName: sk
+              KeyType: HASH
+            - AttributeName: data
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: sk-pk-index
+          KeySchema:
+            - AttributeName: sk
+              KeyType: HASH
+            - AttributeName: pk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: type-sk-index
+          KeySchema:
+            - AttributeName: type
+              KeyType: HASH
+            - AttributeName: sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: type-data-index
+          KeySchema:
+            - AttributeName: type
+              KeyType: HASH
+            - AttributeName: data
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
